@@ -1,0 +1,5 @@
+{
+  "name": "Copy of Neelkanth Society Management",
+  "description": "A web application for managing society receipts and expenses for Neelkanth Apartment. It allows for creating and viewing receipts, tracking income and expenses, and configuring settings like admin details and signature.",
+  "requestFramePermissions": []
+}

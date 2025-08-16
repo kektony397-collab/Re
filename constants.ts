@@ -1,0 +1,117 @@
+
+export const SOCIETY_INFO = {
+  name: "નીલકંઠ એપાર્ટમેન્ટ વિભાગ -૧",
+  subName: "કો.ઓપ. હાઉસિંગ સર્વિસ સોસાયટી લિ.",
+  address: "બ્લોક નંબર ૧ થી ૬, EWS-51. આઈ.સી.બી. આઈલેન્ડની બાજુમાં, વંદે માતરમ ચાર રસ્તા નજીક, ગોતા, અમદાવાદ",
+  regNo: "REG.NO CSAHDCSAHAA202500987"
+};
+
+export const translations = {
+  en: {
+    // General
+    dashboard: "Dashboard",
+    receipts: "Receipts",
+    newReceipt: "New Receipt",
+    expenses: "Expenses",
+    settings: "Settings",
+    logout: "Logout",
+    totalReceipts: "Total Receipts",
+    totalAmount: "Total Amount",
+    save: "Save",
+    cancel: "Cancel",
+    search: "Search...",
+    date: "Date",
+    amount: "Amount",
+    actions: "Actions",
+    view: "View",
+    downloadPdf: "Download PDF",
+    downloadExcel: "Download Excel",
+    // Login
+    login: "Login",
+    username: "Username",
+    password: "Password",
+    // New Receipt
+    createReceipt: "Create Receipt",
+    receiptNo: "Receipt No.",
+    paidTo: "Paid to",
+    residentName: "Resident Name",
+    blockNo: "Block No.",
+    forMonth: "For the month of",
+    paymentMethod: "Payment Method",
+    // Settings
+    adminProfile: "Admin Profile",
+    adminName: "Admin Name",
+    changePassword: "Change Password",
+    currentPassword: "Current Password",
+    newPassword: "New Password",
+    confirmNewPassword: "Confirm New Password",
+    updatePassword: "Update Password",
+    signature: "Signature",
+    signatureType: "Signature Type",
+    typed: "Typed",
+    drawn: "Drawn",
+    upload: "Upload",
+    clear: "Clear",
+    uploadSignature: "Upload Signature Image",
+    // Footer
+    createdBy: "Created By Yash K Pathak",
+    softcopyNotice: "This is only a digital soft copy.",
+    // Headers
+    ...SOCIETY_INFO,
+  },
+  gu: {
+    // General
+    dashboard: "ડેશબોર્ડ",
+    receipts: "રસીદો",
+    newReceipt: "નવી રસીદ",
+    expenses: "ખર્ચ",
+    settings: "સેટિંગ્સ",
+    logout: "લૉગઆઉટ",
+    totalReceipts: "કુલ રસીદો",
+    totalAmount: "કુલ રકમ",
+    save: "સાચવો",
+    cancel: "રદ કરો",
+    search: "શોધો...",
+    date: "તારીખ",
+    amount: "રકમ",
+    actions: "ક્રિયાઓ",
+    view: "જુઓ",
+    downloadPdf: "PDF ડાઉનલોડ કરો",
+    downloadExcel: "Excel ડાઉનલોડ કરો",
+    // Login
+    login: "લૉગિન",
+    username: "વપરાશકર્તા નામ",
+    password: "પાસવર્ડ",
+    // New Receipt
+    createReceipt: "રસીદ બનાવો",
+    receiptNo: "રસીદ નં.",
+    paidTo: "ને ચૂકવેલ",
+    residentName: "રહેવાસીનું નામ",
+    blockNo: "બ્લોક નં.",
+    forMonth: "ના મહિના માટે",
+    paymentMethod: "ચુકવણી પદ્ધતિ",
+    // Settings
+    adminProfile: "એડમિન પ્રોફાઇલ",
+    adminName: "એડમિન નામ",
+    changePassword: "પાસવર્ડ બદલો",
+    currentPassword: "વર્તમાન પાસવર્ડ",
+    newPassword: "નવો પાસવર્ડ",
+    confirmNewPassword: "નવો પાસવર્ડ ખાતરી કરો",
+    updatePassword: "પાસવર્ડ અપડેટ કરો",
+    signature: "સહી",
+    signatureType: "સહીનો પ્રકાર",
+    typed: "ટાઈપ કરેલ",
+    drawn: "દોરેલી",
+    upload: "અપલોડ",
+    clear: "સાફ કરો",
+    uploadSignature: "સહીની છબી અપલોડ કરો",
+    // Footer
+    createdBy: "યશ કે પાઠક દ્વારા બનાવેલ",
+    softcopyNotice: "આ ફક્ત ડિજિટલ સોફ્ટ કોપી છે.",
+    // Headers
+    name: "નીલકંઠ એપાર્ટમેન્ટ વિભાગ -૧",
+    subName: "કો.ઓપ. હાઉસિંગ સર્વિસ સોસાયટી લિ.",
+    address: "બ્લોક નંબર ૧ થી ૬, EWS-51. આઈ.સી.બી. આઈલેન્ડની બાજુમાં, વંદે માતરમ ચાર રસ્તા નજીક, ગોતા, અમદાવાદ",
+    regNo: "REG.NO CSAHDCSAHAA202500987",
+  }
+};
