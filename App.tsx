@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect, useContext, createContext, useRef, useCallback } from 'react';
 import { HashRouter, Routes, Route, Link, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import type { Receipt, Settings, Expense } from './types';
 import { saveAuthCredentials, getAuthCredentials, getAllReceipts, addReceipt, getSettings, saveSettings, getAllExpenses, addExpense } from './db';
 import { translations } from './constants';
-import { generateReceiptPdf, exportReceiptsToPdf, exportReceiptsToExcel, formatDate } from './utils';
-import { FiMenu, FiX, FiGrid, FiFileText, FiPlusSquare, FiTrendingUp, FiSettings, FiLogOut, FiSun, FiMoon, FiSearch, FiChevronDown, FiUpload, FiEdit2, FiSave, FiTrash2, FiPrinter } from 'react-icons/fi';
+import { generateReceiptPdf, exportReceiptsToPdf, exportReceiptsToExcel, formatDate, exportExpensesToPdf } from './utils';
+import { FiMenu, FiX, FiGrid, FiFileText, FiPlusSquare, FiTrendingUp, FiSettings, FiLogOut, FiSun, FiMoon, FiSearch, FiChevronDown, FiUpload, FiEdit2, FiSave, FiTrash2, FiPrinter, FiPlus } from 'react-icons/fi';
 import SignatureCanvas from 'react-signature-canvas';
 import { useForm, SubmitHandler } from 'react-hook-form';
 
@@ -14,13 +13,53 @@ type Language = 'en' | 'gu';
 const LanguageContext = createContext<{ language: Language; setLanguage: (lang: Language) => void; t: (key: string) => string; }>({ language: 'en', setLanguage: () => {}, t: (key: string) => key });
 const useLanguage = () => useContext(LanguageContext);
 
+type Theme = 'default' | 'ocean' | 'forest' | 'sunset';
+const ThemeContext = createContext<{ theme: Theme; setTheme: (theme: Theme) => void; }>({ theme: 'default', setTheme: () => {} });
+const useTheme = () => useContext(ThemeContext);
+
 const AuthContext = createContext<{ isAuthenticated: boolean; login: (user: string, pass: string) => Promise<boolean>; logout: () => void; }>({ isAuthenticated: false, login: async () => false, logout: () => {} });
 const useAuth = () => useContext(AuthContext);
 
 const SettingsContext = createContext<{ settings: Settings | null, loadSettings: () => Promise<void> }>({ settings: null, loadSettings: async () => {} });
 const useSettings = () => useContext(SettingsContext);
 
+// --- HASHING UTILITY ---
+async function sha256(message: string): Promise<string> {
+    const msgBuffer = new TextEncoder().encode(message);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+
 // --- PROVIDERS ---
+const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const [theme, setThemeState] = useState<Theme>('default');
+
+    useEffect(() => {
+        const savedTheme = localStorage.getItem('app-theme') as Theme | null;
+        if (savedTheme) {
+            setThemeState(savedTheme);
+        }
+    }, []);
+
+    const setTheme = (newTheme: Theme) => {
+        setThemeState(newTheme);
+        localStorage.setItem('app-theme', newTheme);
+    };
+
+    useEffect(() => {
+        const newClassName = theme === 'default' ? '' : `theme-${theme}`;
+        document.documentElement.className = newClassName;
+    }, [theme]);
+
+    return (
+        <ThemeContext.Provider value={{ theme, setTheme }}>
+            {children}
+        </ThemeContext.Provider>
+    );
+};
+
 const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [language, setLanguage] = useState<Language>('gu');
   const t = useCallback((key: string): string => {
@@ -45,8 +84,8 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
             }
             const credentials = await getAuthCredentials('admin');
             if (!credentials) {
-                // Default password 'google' hashed (simple approach for demo)
-                await saveAuthCredentials('admin', 'a94a8fe5ccb19ba61c4c0873d391e987982fbbd3'); 
+                const defaultPasswordHash = await sha256('google');
+                await saveAuthCredentials('admin', defaultPasswordHash); 
             }
         };
         checkAuth();
@@ -55,13 +94,13 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     const login = async (user: string, pass: string): Promise<boolean> => {
         if (user === 'admin') {
             const credentials = await getAuthCredentials('admin');
-            // simple sha1-like hash for demo; in production use bcrypt
-            const passHash = (pass === 'google' && credentials?.passwordHash === 'a94a8fe5ccb19ba61c4c0873d391e987982fbbd3') || (credentials?.passwordHash === pass) ; // for changed password
-            
-            if(pass === 'google' || credentials?.passwordHash === pass){
-                 setIsAuthenticated(true);
-                 sessionStorage.setItem('isAuthenticated', 'true');
-                 return true;
+            if(credentials) {
+                const passHash = await sha256(pass);
+                if (passHash === credentials.passwordHash) {
+                    setIsAuthenticated(true);
+                    sessionStorage.setItem('isAuthenticated', 'true');
+                    return true;
+                }
             }
         }
         return false;
@@ -132,14 +171,14 @@ const Sidebar: React.FC<{ isOpen: boolean, setIsOpen: (isOpen: boolean) => void 
             <div className={`fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden transition-opacity ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setIsOpen(false)}></div>
             <aside className={`fixed top-0 left-0 h-full bg-slate-800 text-white w-64 transform ${isOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out md:translate-x-0 md:relative md:flex-shrink-0 z-40`}>
                 <div className={`p-4 flex justify-between items-center border-b border-slate-700 ${t('language') === 'gu' ? 'font-gujarati' : ''}`}>
-                    <h1 className="text-xl font-bold text-cyan-400">Neelkanth</h1>
+                    <h1 className="text-xl font-bold text-primary">Neelkanth</h1>
                     <button onClick={() => setIsOpen(false)} className="md:hidden text-2xl"><FiX /></button>
                 </div>
                 <nav className="mt-4">
                     <ul>
                         {navLinks.map(link => (
                             <li key={link.path}>
-                                <Link to={link.path} onClick={() => setIsOpen(false)} className={`flex items-center py-3 px-4 my-1 transition-colors duration-200 hover:bg-slate-700 ${location.pathname === link.path ? 'bg-cyan-600' : ''} ${t('language') === 'gu' ? 'font-gujarati' : ''}`}>
+                                <Link to={link.path} onClick={() => setIsOpen(false)} className={`flex items-center py-3 px-4 my-1 transition-colors duration-200 hover:bg-slate-700 ${location.pathname === link.path ? 'bg-primary-dark text-white' : ''} ${t('language') === 'gu' ? 'font-gujarati' : ''}`}>
                                     <link.icon className="mr-3"/>
                                     <span>{link.label}</span>
                                 </Link>
@@ -160,7 +199,8 @@ const Sidebar: React.FC<{ isOpen: boolean, setIsOpen: (isOpen: boolean) => void 
 
 const Header: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => {
     const { language, setLanguage, t } = useLanguage();
-    
+    const { theme, setTheme } = useTheme();
+
     return (
         <header className="bg-white dark:bg-slate-800 shadow-md p-4 flex justify-between items-center">
             <button onClick={onMenuClick} className="text-slate-600 dark:text-slate-300 text-2xl md:hidden">
@@ -172,9 +212,22 @@ const Header: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => {
             <div className="flex items-center space-x-4">
                  <div className="relative">
                     <select
+                      value={theme}
+                      onChange={(e) => setTheme(e.target.value as Theme)}
+                      className="bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-white rounded-md py-1 pl-3 pr-8 appearance-none focus:outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      <option value="default">Default</option>
+                      <option value="ocean">Ocean</option>
+                      <option value="forest">Forest</option>
+                      <option value="sunset">Sunset</option>
+                    </select>
+                    <FiChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500 dark:text-slate-400" />
+                  </div>
+                 <div className="relative">
+                    <select
                       value={language}
                       onChange={(e) => setLanguage(e.target.value as Language)}
-                      className="bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-white rounded-md py-1 pl-3 pr-8 appearance-none focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                      className="bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-white rounded-md py-1 pl-3 pr-8 appearance-none focus:outline-none focus:ring-2 focus:ring-primary"
                     >
                       <option value="en">English</option>
                       <option value="gu">ગુજરાતી</option>
@@ -255,7 +308,7 @@ const LoginPage: React.FC = () => {
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
                             readOnly
-                            className="w-full px-3 py-2 bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-white border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 cursor-not-allowed"
+                            className="w-full px-3 py-2 bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-white border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary cursor-not-allowed"
                         />
                     </div>
                     <div className="mb-6">
@@ -264,11 +317,11 @@ const LoginPage: React.FC = () => {
                             type="password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="w-full px-3 py-2 bg-white dark:bg-slate-700 text-slate-800 dark:text-white border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                            className="w-full px-3 py-2 bg-white dark:bg-slate-700 text-slate-800 dark:text-white border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                         />
                     </div>
                     {error && <p className="text-red-500 text-sm text-center mb-4">{error}</p>}
-                    <button type="submit" className="w-full bg-cyan-600 text-white py-2 rounded-md hover:bg-cyan-700 transition-colors">
+                    <button type="submit" className="w-full bg-primary-dark text-white py-2 rounded-md hover:bg-primary transition-colors">
                         {t('login')}
                     </button>
                 </form>
@@ -297,7 +350,7 @@ const DashboardPage: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card>
                     <h3 className="text-lg font-semibold text-slate-600 dark:text-slate-300">{t('totalReceipts')}</h3>
-                    <p className="text-4xl font-bold text-cyan-500 mt-2">{receipts.length}</p>
+                    <p className="text-4xl font-bold text-primary mt-2">{receipts.length}</p>
                 </Card>
                 <Card>
                     <h3 className="text-lg font-semibold text-slate-600 dark:text-slate-300">{t('totalAmount')}</h3>
@@ -333,6 +386,7 @@ const ReceiptsListPage: React.FC = () => {
     const totalAmount = filteredReceipts.reduce((sum, r) => sum + r.amount, 0);
 
     return (
+        <>
         <Card>
             <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
                 <h2 className="text-2xl font-bold text-slate-800 dark:text-white">{t('receipts')}</h2>
@@ -343,7 +397,7 @@ const ReceiptsListPage: React.FC = () => {
                         placeholder={t('search')}
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
-                        className="w-full md:w-64 pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                        className="w-full md:w-64 pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
                     />
                 </div>
             </div>
@@ -372,7 +426,7 @@ const ReceiptsListPage: React.FC = () => {
                                 <td className="p-3 text-slate-500 dark:text-slate-400">{receipt.date}</td>
                                 <td className="p-3 text-right text-green-600 font-semibold dark:text-green-400">₹{receipt.amount.toFixed(2)}</td>
                                 <td className="p-3 text-center">
-                                    <button onClick={() => setSelectedReceipt(receipt)} className="text-cyan-500 hover:text-cyan-700">{t('view')}</button>
+                                    <button onClick={() => setSelectedReceipt(receipt)} className="text-primary hover:text-primary-dark">{t('view')}</button>
                                 </td>
                             </tr>
                         ))}
@@ -388,6 +442,10 @@ const ReceiptsListPage: React.FC = () => {
             </div>
             {selectedReceipt && <ReceiptModal receipt={selectedReceipt} settings={settings} onClose={() => setSelectedReceipt(null)} />}
         </Card>
+         <Link to="/new-receipt" title={t('newReceipt')} className="md:hidden fixed bottom-6 right-6 bg-primary-dark text-white p-4 rounded-full shadow-lg hover:bg-primary transition-transform duration-200 ease-in-out hover:scale-110 flex items-center justify-center">
+           <FiPlus size={24} />
+        </Link>
+        </>
     );
 };
 
@@ -434,30 +492,30 @@ const NewReceiptPage: React.FC = () => {
                 </div>
                 <div>
                     <label className="block text-slate-600 dark:text-slate-300 mb-2">{t('residentName')}</label>
-                    <input {...register('name', { required: true })} className="w-full px-3 py-2 bg-white dark:bg-slate-700 text-slate-800 dark:text-white border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                    <input {...register('name', { required: true })} className="w-full px-3 py-2 bg-white dark:bg-slate-700 text-slate-800 dark:text-white border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary" />
                     {errors.name && <p className="text-red-500 text-sm mt-1">Name is required</p>}
                 </div>
                 <div>
                     <label className="block text-slate-600 dark:text-slate-300 mb-2">{t('blockNo')}</label>
-                    <input {...register('blockNumber', { required: true })} className="w-full px-3 py-2 bg-white dark:bg-slate-700 text-slate-800 dark:text-white border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                    <input {...register('blockNumber', { required: true })} className="w-full px-3 py-2 bg-white dark:bg-slate-700 text-slate-800 dark:text-white border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary" />
                     {errors.blockNumber && <p className="text-red-500 text-sm mt-1">Block number is required</p>}
                 </div>
                 <div>
                     <label className="block text-slate-600 dark:text-slate-300 mb-2">{t('date')}</label>
-                    <input type="date" {...register('date', { required: true })} className="w-full px-3 py-2 bg-white dark:bg-slate-700 text-slate-800 dark:text-white border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                    <input type="date" {...register('date', { required: true })} className="w-full px-3 py-2 bg-white dark:bg-slate-700 text-slate-800 dark:text-white border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary" />
                 </div>
                 <div>
                     <label className="block text-slate-600 dark:text-slate-300 mb-2">{t('amount')}</label>
-                    <input type="number" {...register('amount', { required: true, min: 1 })} className="w-full px-3 py-2 bg-white dark:bg-slate-700 text-slate-800 dark:text-white border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                    <input type="number" {...register('amount', { required: true, min: 1 })} className="w-full px-3 py-2 bg-white dark:bg-slate-700 text-slate-800 dark:text-white border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary" />
                     {errors.amount && <p className="text-red-500 text-sm mt-1">A valid amount is required</p>}
                 </div>
                 <div>
                     <label className="block text-slate-600 dark:text-slate-300 mb-2">{t('forMonth')}</label>
-                    <input type="month" {...register('forMonth', { required: true })} className="w-full px-3 py-2 bg-white dark:bg-slate-700 text-slate-800 dark:text-white border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                    <input type="month" {...register('forMonth', { required: true })} className="w-full px-3 py-2 bg-white dark:bg-slate-700 text-slate-800 dark:text-white border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary" />
                 </div>
                 <div>
                     <label className="block text-slate-600 dark:text-slate-300 mb-2">{t('paymentMethod')}</label>
-                    <select {...register('paymentMethod')} className="w-full px-3 py-2 bg-white dark:bg-slate-700 text-slate-800 dark:text-white border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                    <select {...register('paymentMethod')} className="w-full px-3 py-2 bg-white dark:bg-slate-700 text-slate-800 dark:text-white border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
                         <option>Cash</option>
                         <option>Cheque</option>
                         <option>Online</option>
@@ -465,7 +523,7 @@ const NewReceiptPage: React.FC = () => {
                 </div>
                 <div className="md:col-span-2 flex justify-end gap-4">
                     <button type="button" onClick={() => navigate('/receipts')} className="px-6 py-2 bg-slate-200 dark:bg-slate-600 rounded-md hover:bg-slate-300 dark:hover:bg-slate-500 transition">{t('cancel')}</button>
-                    <button type="submit" className="px-6 py-2 bg-cyan-600 text-white rounded-md hover:bg-cyan-700 transition">{t('save')}</button>
+                    <button type="submit" className="px-6 py-2 bg-primary-dark text-white rounded-md hover:bg-primary transition">{t('save')}</button>
                 </div>
             </form>
         </Card>
@@ -518,13 +576,16 @@ const ExpensesPage: React.FC = () => {
                             <label>Amount</label>
                             <input type="number" {...register('amount', {required: true, min: 0.01})} className="w-full mt-1 px-3 py-2 bg-white dark:bg-slate-700 border rounded-md" />
                         </div>
-                        <button type="submit" className="w-full py-2 bg-cyan-600 text-white rounded-md hover:bg-cyan-700">{mode === 'add' ? 'Add Income' : 'Add Expense'}</button>
+                        <button type="submit" className="w-full py-2 bg-primary-dark text-white rounded-md hover:bg-primary">{mode === 'add' ? 'Add Income' : 'Add Expense'}</button>
                     </form>
                 </Card>
             </div>
             <div className="lg:col-span-2">
                 <Card>
-                    <h2 className="text-xl font-bold mb-4">Transaction History</h2>
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-xl font-bold">Transaction History</h2>
+                        <button onClick={() => exportExpensesToPdf(expenses, t)} className="bg-red-500 text-white px-3 py-1 rounded-lg hover:bg-red-600 transition flex items-center gap-2 text-sm"><FiPrinter/> Export PDF</button>
+                    </div>
                     <div className="overflow-auto max-h-[60vh]">
                         <table className="w-full text-left">
                             <thead>
@@ -607,60 +668,113 @@ const SettingsPage: React.FC = () => {
     if (!settings) return <div>Loading...</div>;
 
     return (
-        <form onSubmit={handleSubmit(onSubmit)}>
-            <Card>
-                <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-6">{t('settings')}</h2>
-                <div className="space-y-8">
-                    {/* Admin Profile */}
-                    <div>
-                        <h3 className="text-lg font-semibold border-b pb-2 mb-4">{t('adminProfile')}</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">{t('adminName')}</label>
-                                <input {...register('adminName')} className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border rounded-md"/>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">{t('blockNo')}</label>
-                                <input {...register('blockNumber')} className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border rounded-md"/>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Signature */}
-                    <div>
-                        <h3 className="text-lg font-semibold border-b pb-2 mb-4">{t('signature')}</h3>
+        <div className="space-y-6">
+            <form onSubmit={handleSubmit(onSubmit)}>
+                <Card>
+                    <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-6">{t('settings')}</h2>
+                    <div className="space-y-8">
+                        {/* Admin Profile */}
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{t('signatureType')}</label>
-                            <select {...register('signatureType')} className="w-full md:w-1/3 px-3 py-2 bg-white dark:bg-slate-700 border rounded-md">
-                                <option value="typed">{t('typed')}</option>
-                                <option value="drawn">{t('drawn')}</option>
-                                <option value="uploaded">{t('upload')}</option>
-                            </select>
-                        </div>
-                        <div className="mt-4">
-                            {signatureType === 'typed' && (
-                                <input {...register('typedSignature')} placeholder="Enter name for signature" className="mt-1 block w-full md:w-1/3 px-3 py-2 bg-white dark:bg-slate-700 border rounded-md"/>
-                            )}
-                            {signatureType === 'drawn' && (
-                                <div className="border rounded-md">
-                                    <SignatureCanvas ref={sigPad} canvasProps={{ className: 'w-full h-48' }} />
-                                    <button type="button" onClick={() => sigPad.current?.clear()} className="text-sm p-2 bg-slate-200 dark:bg-slate-600 w-full">{t('clear')}</button>
-                                </div>
-                            )}
-                            {signatureType === 'uploaded' && (
+                            <h3 className="text-lg font-semibold border-b pb-2 mb-4">{t('adminProfile')}</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <input type="file" accept="image/*" onChange={handleFileUpload} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-cyan-50 file:text-cyan-700 hover:file:bg-cyan-100"/>
-                                    {settings.uploadedSignature && <img src={settings.uploadedSignature} alt="Signature" className="mt-4 border max-h-24"/>}
+                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">{t('adminName')}</label>
+                                    <input {...register('adminName')} className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border rounded-md"/>
                                 </div>
-                            )}
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">{t('blockNo')}</label>
+                                    <input {...register('blockNumber')} className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border rounded-md"/>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Signature */}
+                        <div>
+                            <h3 className="text-lg font-semibold border-b pb-2 mb-4">{t('signature')}</h3>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{t('signatureType')}</label>
+                                <select {...register('signatureType')} className="w-full md:w-1/3 px-3 py-2 bg-white dark:bg-slate-700 border rounded-md">
+                                    <option value="typed">{t('typed')}</option>
+                                    <option value="drawn">{t('drawn')}</option>
+                                    <option value="uploaded">{t('upload')}</option>
+                                </select>
+                            </div>
+                            <div className="mt-4">
+                                {signatureType === 'typed' && (
+                                    <input {...register('typedSignature')} placeholder="Enter name for signature" className="mt-1 block w-full md:w-1/3 px-3 py-2 bg-white dark:bg-slate-700 border rounded-md"/>
+                                )}
+                                {signatureType === 'drawn' && (
+                                    <div className="border rounded-md">
+                                        <SignatureCanvas ref={sigPad} canvasProps={{ className: 'w-full h-48' }} />
+                                        <button type="button" onClick={() => sigPad.current?.clear()} className="text-sm p-2 bg-slate-200 dark:bg-slate-600 w-full">{t('clear')}</button>
+                                    </div>
+                                )}
+                                {signatureType === 'uploaded' && (
+                                    <div>
+                                        <input type="file" accept="image/*" onChange={handleFileUpload} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary-dark hover:file:bg-primary/20"/>
+                                        {settings.uploadedSignature && <img src={settings.uploadedSignature} alt="Signature" className="mt-4 border max-h-24"/>}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
+                    <div className="mt-8 flex justify-end">
+                        <button type="submit" className="px-6 py-2 bg-primary-dark text-white rounded-md hover:bg-primary">{t('save')}</button>
+                    </div>
+                </Card>
+            </form>
+            <ChangePasswordForm />
+        </div>
+    );
+};
+
+const ChangePasswordForm = () => {
+    const { t } = useLanguage();
+    const { register, handleSubmit, formState: { errors }, watch, reset } = useForm();
+    const [message, setMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
+
+    const onSubmit = async (data: any) => {
+        setMessage(null);
+        const credentials = await getAuthCredentials('admin');
+        if (credentials) {
+            const currentPassHash = await sha256(data.currentPassword);
+            if (currentPassHash !== credentials.passwordHash) {
+                setMessage({ type: 'error', text: 'Current password is not correct.' });
+                return;
+            }
+
+            const newPassHash = await sha256(data.newPassword);
+            await saveAuthCredentials('admin', newPassHash);
+            setMessage({ type: 'success', text: 'Password updated successfully!' });
+            reset();
+        }
+    };
+
+    return (
+        <Card>
+            <h3 className="text-lg font-semibold border-b pb-2 mb-4">{t('changePassword')}</h3>
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                 <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">{t('currentPassword')}</label>
+                    <input type="password" {...register('currentPassword', { required: 'Current password is required' })} className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border rounded-md"/>
+                    {errors.currentPassword && <p className="text-red-500 text-sm mt-1">{errors.currentPassword.message as string}</p>}
                 </div>
-                <div className="mt-8 flex justify-end">
-                    <button type="submit" className="px-6 py-2 bg-cyan-600 text-white rounded-md hover:bg-cyan-700">{t('save')}</button>
+                 <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">{t('newPassword')}</label>
+                    <input type="password" {...register('newPassword', { required: 'New password is required', minLength: { value: 6, message: 'Password must be at least 6 characters' } })} className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border rounded-md"/>
+                    {errors.newPassword && <p className="text-red-500 text-sm mt-1">{errors.newPassword.message as string}</p>}
                 </div>
-            </Card>
-        </form>
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">{t('confirmNewPassword')}</label>
+                    <input type="password" {...register('confirmNewPassword', { required: true, validate: value => value === watch('newPassword') || 'Passwords do not match' })} className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-700 border rounded-md"/>
+                    {errors.confirmNewPassword && <p className="text-red-500 text-sm mt-1">{errors.confirmNewPassword.message as string}</p>}
+                </div>
+                {message && <p className={`${message.type === 'success' ? 'text-green-500' : 'text-red-500'} text-sm`}>{message.text}</p>}
+                <div className="flex justify-end">
+                    <button type="submit" className="px-6 py-2 bg-primary-dark text-white rounded-md hover:bg-primary">{t('updatePassword')}</button>
+                </div>
+            </form>
+        </Card>
     );
 };
 
@@ -673,7 +787,7 @@ const ReceiptModal: React.FC<{ receipt: Receipt, settings: Settings | null, onCl
                 <div className="p-4 border-b dark:border-slate-700 flex justify-between items-center">
                     <h3 className="text-lg font-bold">{t('receipt')} #{receipt.receiptNumber}</h3>
                     <div className="flex gap-2">
-                         <button onClick={() => generateReceiptPdf(receipt, settings, t)} className="bg-cyan-600 text-white px-4 py-2 rounded-lg hover:bg-cyan-700 transition flex items-center gap-2 text-sm"><FiPrinter/>{t('downloadPdf')}</button>
+                         <button onClick={() => generateReceiptPdf(receipt, settings, t)} className="bg-primary-dark text-white px-4 py-2 rounded-lg hover:bg-primary transition flex items-center gap-2 text-sm"><FiPrinter/>{t('downloadPdf')}</button>
                          <button onClick={onClose} className="text-2xl text-slate-500 hover:text-slate-800 dark:hover:text-white"><FiX /></button>
                     </div>
                 </div>
@@ -693,45 +807,67 @@ const ReceiptTemplate: React.FC<{ receipt: Receipt, settings: Settings | null }>
     if (settings) {
         switch (settings.signatureType) {
             case 'drawn':
-                signatureContent = <img src={settings.drawnSignature} alt="signature" className="h-12"/>;
+                signatureContent = <img src={settings.drawnSignature} alt="signature" className="h-12 mx-auto"/>;
                 break;
             case 'uploaded':
-                signatureContent = <img src={settings.uploadedSignature} alt="signature" className="h-12"/>;
+                signatureContent = <img src={settings.uploadedSignature} alt="signature" className="h-12 mx-auto"/>;
                 break;
             case 'typed':
             default:
-                signatureContent = <p className="font-semibold text-lg">{settings.typedSignature}</p>;
+                signatureContent = <p className="font-semibold text-lg" style={{fontFamily: "'Brush Script MT', cursive"}}>{settings.typedSignature}</p>;
         }
     }
     
     return (
-        <div id="receipt-template" className="bg-white p-8 font-gujarati text-slate-800">
-             <div className="text-center border-b-2 border-slate-400 pb-4">
-                 <h1 className="text-3xl font-bold text-cyan-700">{t('name')}</h1>
-                 <h2 className="text-lg">{t('subName')}</h2>
-                 <p className="text-sm">{t('address')}</p>
-                 <p className="text-sm font-semibold mt-1">{t('regNo')}</p>
+        <div id="receipt-template" className="bg-white p-6 text-black w-[800px] mx-auto border-2 border-black">
+             <div className="text-center pb-4">
+                 <h1 className="text-4xl font-bold text-primary-dark font-gujarati">{t('name')}</h1>
+                 <h2 className="text-xl font-gujarati">{t('subName')}</h2>
+                 <p className="text-sm font-gujarati">{t('address')}</p>
+                 <p className="text-sm font-semibold mt-1 font-gujarati">{t('regNo')}</p>
              </div>
-             <div className="flex justify-between items-center mt-4">
-                 <p><span className="font-bold">રસીદ નં. / Receipt No:</span> {receipt.receiptNumber}</p>
-                 <p><span className="font-bold">તારીખ / Date:</span> {receipt.date}</p>
+             <div className="border-t-2 border-b-2 border-black border-dashed flex justify-between items-center my-4 py-2">
+                 <p className="font-bold text-lg font-gujarati">રસીદ / RECEIPT</p>
+                 <div className="text-right">
+                    <p><span className="font-bold">No:</span> {receipt.receiptNumber}</p>
+                    <p><span className="font-bold">Date:</span> {receipt.date}</p>
+                 </div>
              </div>
-             <div className="mt-6">
-                <p className="leading-relaxed">
-                    શ્રીમાન / Received from Mr./Mrs. <span className="font-bold border-b border-dotted border-slate-600 px-2">{receipt.name}</span>
-                    બ્લોક નંબર / Block No. <span className="font-bold border-b border-dotted border-slate-600 px-2">{receipt.blockNumber}</span>
-                    માટે રકમ / the sum of Rupees <span className="font-bold border-b border-dotted border-slate-600 px-2">₹{receipt.amount.toFixed(2)}</span>
-                    <span className="font-bold border-b border-dotted border-slate-600 px-2">{t(receipt.paymentMethod)}</span> થી
-                    મહિના / for the month of <span className="font-bold border-b border-dotted border-slate-600 px-2">{receipt.forMonth}</span>.
-                </p>
+             <div className="mt-6 text-lg space-y-3 font-gujarati">
+                <div className="flex items-baseline">
+                    <span className="w-48">Received from:</span>
+                    <span className="font-bold border-b border-dotted border-black flex-1">{receipt.name}</span>
+                </div>
+                 <div className="flex items-baseline">
+                    <span className="w-48">Block No:</span>
+                    <span className="font-bold border-b border-dotted border-black flex-1">{receipt.blockNumber}</span>
+                </div>
+                <div className="flex items-baseline">
+                    <span className="w-48">For the month of:</span>
+                    <span className="font-bold border-b border-dotted border-black flex-1">{receipt.forMonth}</span>
+                </div>
+                <div className="flex items-baseline">
+                    <span className="w-48">Payment Method:</span>
+                    <span className="font-bold border-b border-dotted border-black flex-1">{receipt.paymentMethod}</span>
+                </div>
              </div>
-             <div className="flex justify-between items-end mt-16 pt-8">
-                 <div className="text-sm text-slate-500">
+
+             <div className="mt-8 flex justify-between items-end">
+                <div className="text-xs text-slate-500">
                      <p>{t('softcopyNotice')}</p>
+                 </div>
+                <div className="border-2 border-black px-4 py-2">
+                    <p className="text-2xl font-bold text-center">₹{receipt.amount.toFixed(2)}</p>
+                </div>
+             </div>
+             
+             <div className="flex justify-between items-end mt-12 pt-8">
+                 <div className="text-center">
+                    <p className="border-t border-black pt-1 mt-1 font-bold">Receiver's Sign</p>
                  </div>
                  <div className="text-center">
                     {signatureContent}
-                    <p className="border-t border-slate-600 pt-1 mt-1 font-bold">અધિકૃત સહી / Authorised Signatory</p>
+                    <p className="border-t border-black pt-1 mt-1 font-bold">Authorised Signatory</p>
                  </div>
              </div>
         </div>
@@ -744,6 +880,7 @@ const App: React.FC = () => {
     <AuthProvider>
         <SettingsProvider>
             <LanguageProvider>
+              <ThemeProvider>
                 <HashRouter>
                     <Routes>
                         <Route path="/login" element={<LoginPage />} />
@@ -762,6 +899,7 @@ const App: React.FC = () => {
                         } />
                     </Routes>
                 </HashRouter>
+              </ThemeProvider>
             </LanguageProvider>
         </SettingsProvider>
     </AuthProvider>

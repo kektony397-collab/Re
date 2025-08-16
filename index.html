@@ -10,6 +10,23 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Hind+Vadodara:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+      /* Base variables (Default Theme) */
+      :root {
+        --color-primary: 14 165 233; /* Tailwind sky-500 */
+        --color-primary-dark: 8 145 178; /* Tailwind cyan-600 */
+      }
+      html.theme-ocean {
+        --color-primary: 59 130 246; /* Tailwind blue-500 */
+        --color-primary-dark: 37 99 235; /* Tailwind blue-600 */
+      }
+      html.theme-forest {
+        --color-primary: 34 197 94; /* Tailwind green-500 */
+        --color-primary-dark: 22 163 74; /* Tailwind green-600 */
+      }
+      html.theme-sunset {
+        --color-primary: 249 115 22; /* Tailwind orange-500 */
+        --color-primary-dark: 234 88 12; /* Tailwind orange-600 */
+      }
       body {
         font-family: 'Inter', sans-serif;
       }
@@ -17,6 +34,21 @@
         font-family: 'Hind Vadodara', sans-serif;
       }
     </style>
+     <script>
+      // Configure Tailwind CSS to use our CSS variables for theming
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: {
+                DEFAULT: 'rgb(var(--color-primary) / <alpha-value>)',
+                dark: 'rgb(var(--color-primary-dark) / <alpha-value>)',
+              }
+            }
+          }
+        }
+      }
+    </script>
     <!-- PDF and Excel generation libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>

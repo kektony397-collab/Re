@@ -1,5 +1,4 @@
-
-import type { Receipt, Settings } from './types';
+import type { Receipt, Settings, Expense } from './types';
 import { SOCIETY_INFO } from './constants';
 
 // These would be imported from npm packages in a real build environment
@@ -11,8 +10,12 @@ export const generateReceiptPdf = (receipt: Receipt, settings: Settings | null, 
   const receiptElement = document.getElementById('receipt-template');
   if (receiptElement && (window as any).html2canvas && (window as any).jspdf) {
     const { jsPDF } = (window as any).jspdf;
-    (window as any).html2canvas(receiptElement, { scale: 2 }).then((canvas: HTMLCanvasElement) => {
-      const imgData = canvas.toDataURL('image/png');
+    (window as any).html2canvas(receiptElement, { 
+        scale: 3, // Higher scale for better quality
+        useCORS: true,
+        logging: false 
+    }).then((canvas: HTMLCanvasElement) => {
+      const imgData = canvas.toDataURL('image/png', 1.0);
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
@@ -22,6 +25,67 @@ export const generateReceiptPdf = (receipt: Receipt, settings: Settings | null, 
   } else {
     alert("PDF generation library is not loaded.");
   }
+};
+
+export const exportExpensesToPdf = (expenses: Expense[], t: (key: string) => string): void => {
+  if (!(window as any).jspdf || !(window as any).jspdf.plugin.autotable) {
+    alert("PDF generation library is not loaded.");
+    return;
+  }
+  const { jsPDF } = (window as any).jspdf;
+  const doc = new jsPDF();
+
+  const totalIncome = expenses.filter(e => e.amount > 0).reduce((sum, e) => sum + e.amount, 0);
+  const totalExpense = expenses.filter(e => e.amount < 0).reduce((sum, e) => sum + Math.abs(e.amount), 0);
+  const netBalance = totalIncome - totalExpense;
+
+  const head = [['Date', 'Description', 'Amount']];
+  const body = expenses.map(e => [
+      e.date,
+      e.description,
+      `₹${e.amount.toFixed(2)}`
+  ]);
+  
+  (doc as any).autoTable({
+    head,
+    body,
+    startY: 25,
+    didDrawPage: (data: any) => {
+      // Header
+      doc.setFontSize(20);
+      doc.text("Expense Report", data.settings.margin.left, 15);
+    },
+    willDrawCell: (data: any) => {
+        if (data.column.index === 2 && data.cell.section === 'body') {
+            const amount = parseFloat(data.cell.text[0].replace(/[₹,]/g, ''));
+            if (amount < 0) {
+                 doc.setTextColor(255, 0, 0); // Red for expenses
+            } else {
+                 doc.setTextColor(0, 128, 0); // Green for income
+            }
+        }
+    },
+    didParseCell: (data: any) => {
+      if (data.column.index === 2 && data.cell.section === 'body') {
+        data.cell.styles.halign = 'right';
+      }
+    }
+  });
+
+  let finalY = (doc as any).lastAutoTable.finalY || 30;
+  doc.setTextColor(0,0,0); // Reset color
+  doc.setFontSize(12);
+  doc.text(`Total Income:`, 14, finalY + 10);
+  doc.text(`₹${totalIncome.toFixed(2)}`, 200, finalY + 10, {align: 'right'});
+  doc.text(`Total Expense:`, 14, finalY + 17);
+  doc.text(`₹${totalExpense.toFixed(2)}`, 200, finalY + 17, {align: 'right'});
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`Net Balance:`, 14, finalY + 25);
+  doc.text(`₹${netBalance.toFixed(2)}`, 200, finalY + 25, {align: 'right'});
+
+
+  doc.save('Expense_Report.pdf');
 };
 
 
